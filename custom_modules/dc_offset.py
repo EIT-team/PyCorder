@@ -40,7 +40,7 @@ import collections
 ################################################################
 # The module itself
 
-class TUT_3(ModuleBase):
+class dc_offset(ModuleBase):
     ''' Tutorial Module 3
     
     Calculate and display a FFT for selected channels. Channel selection will be
