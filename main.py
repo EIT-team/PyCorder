@@ -145,7 +145,7 @@ from modbase import *
 #from tutorial.tut_2 import TUT_2
 #from tutorial.tut_3 import TUT_3
 #from tutorial.tut_4 import TUT_4
-
+from custom_modules.tut_3 import TUT_3
 
 def InstantiateModules(run_as):
     ''' Instantiate and arrange module objects. 
@@ -168,7 +168,8 @@ def InstantiateModules(run_as):
                    MNT_Recording(),
                    TRG_Eeg(),
                    StorageVision(), 
-                   FLT_Eeg(), 
+                   FLT_Eeg(),
+                   TUT_3(),				   
                    RDA_Server(),
                    IMP_Display(), 
                    DISP_Scope(instance=0)
