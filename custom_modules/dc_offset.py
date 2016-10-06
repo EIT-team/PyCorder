@@ -65,19 +65,27 @@ class dc_offset(ModuleBase):
         self.onlinePane = _OnlineCfgPane()
 
         self.signalPane = _SignalPane()
+        self.setDCScale()
 		
         self.connect(self.onlinePane.btnDCOffset, 
             Qt.SIGNAL("clicked()"),
             self.toggleDCPane)
+        
+        self.connect(self.onlinePane.comboBoxScale,
+					Qt.SIGNAL("currentIndexChanged(int)"),
+					self.setDCScale)
 			
     def toggleDCPane(self):
         if self.signalPane.isVisible():
             self.signalPane.hide()
-            
-
+         
         else:
             self.signalPane.show()
-            
+          
+          #set the Scale of the DC offset plot
+    def setDCScale(self):
+		scale = self.onlinePane.getCurrentValues()
+		self.signalPane.setScale(scale)
 		
     def process_input(self, datablock):
         ''' Get data from previous module.
@@ -88,7 +96,13 @@ class dc_offset(ModuleBase):
         self.dataavailable = True       # signal data availability
         self.data = datablock           # get a local reference
         
-   
+        #Caluclate the mean dc value on each channel and update plot values
+        #but only if the pane is visible
+        
+        if self.signalPane.isVisible():
+     	    dc_offsets = np.mean(datablock.eeg_channels,1)/1000 #Convert from uV to mV
+     	    chan_indices = range(datablock.channel_properties.shape[0])
+     	    self.signalPane.DCValues.setData(chan_indices,dc_offsets)
     
     def process_output(self):
         ''' Send data out to next module
@@ -142,7 +156,7 @@ class _OnlineCfgPane(Qt.QFrame):
         
         # add the frequency range combobox
         self.comboBoxScale = QtGui.QComboBox(self.groupBox)
-        self.comboBoxScale.setObjectName("comboBoxChunk")
+        self.comboBoxScale.setObjectName("comboBoxScale")
         self.comboBoxScale.addItem(Qt.QString("10"))
         self.comboBoxScale.addItem(Qt.QString("100"))
         self.comboBoxScale.addItem(Qt.QString("250"))
@@ -161,9 +175,12 @@ class _OnlineCfgPane(Qt.QFrame):
         self.gridLayout.addWidget(self.groupBox, 0, 0, 1, 1)
 
         # set default values
-        self.comboBoxScale.setCurrentIndex(2)
-
-        
+        self.comboBoxScale.setCurrentIndex(1)
+    
+    def getCurrentValues(self):
+    	scale,ok = self.comboBoxScale.currentText().toFloat()
+        return scale
+       
 		################################################################
 # Signal Pane
 
@@ -173,127 +190,47 @@ class _SignalPane(Qt.QFrame):
     def __init__(self , *args):
         apply(Qt.QFrame.__init__, (self,) + args)
 		
-		
-        self.DCplot = Qwt.QwtPlot(self)
         self.setMinimumSize(Qt.QSize(200,50))
+
+		#Initialise plot object and set background, labels etc
+        self.DCplot = Qwt.QwtPlot(self)
+        self.DCplot.setCanvasBackground(Qt.Qt.white)
+
+        font = Qt.QFont("arial", 9)
+        title = Qwt.QwtText('DC Offset')
+        xLabel = Qwt.QwtText('Channel number')
+        yLabel = Qwt.QwtText('Voltage (mV)')
+        
+        title.setFont(font)
+        xLabel.setFont(font)
+        yLabel.setFont(font)
+        
+        self.DCplot.setTitle(title)
+        self.DCplot.setAxisTitle(Qwt.QwtPlot.xBottom,xLabel)
+        self.DCplot.setAxisTitle(Qwt.QwtPlot.yLeft,yLabel)
+        
         
         self.verticalLayout = QtGui.QVBoxLayout(self)
-		
         self.verticalLayout.addWidget(self.DCplot)
-        # start 50ms display timer 
-        self.startTimer(50)
 
+        self.DCValues = Qwt.QwtPlotCurve()
+        self.DCValues.attach(self.DCplot)
+        
+        self.grid = Qwt.QwtPlotGrid()
+        self.grid.enableXMin(True)
+        self.grid.setMajPen(Qt.QPen(Qt.Qt.gray, 0, Qt.Qt.SolidLine))
+        self.grid.setMinPen(Qt.QPen(Qt.Qt.gray, 0, Qt.Qt.DashLine))
+        self.grid.attach(self.DCplot)
+        
+        #Start display timer to update plot
+        self.startTimer(100)
+        
+        #Set the y-axis scale 
+    def setScale(self, scale):
+        self.DCplot.setAxisScale(0,-scale,scale)
 
-    def setupDisplay(self, channels, samplerate, datapoints, frequency_range):
-        ''' Rearrange and setup plot widgets
-        @param channels: list of selected channels as EEG_ChannelProperties 
-        @param samplerate:  sampling rate in Hz
-        @param datapoints:  chunk size in samples
-        @param frequency_range: show frequencies up to this value [Hz]
-        ''' 
-        # flush input data queue
-        while not self.data_queue.empty():
-            self.data_queue.get_nowait()
-
-        # remove previous plot widgets
-        for plot in self.plot[:]:
-            self.verticalLayout.removeWidget(plot)
-            plot.setParent(None)
-            self.plot.remove(plot)
-            del plot
-
-        # create and setup requested display widgets
-        pos = 0
-        for channel in channels:
-            plot = _FFT_Plot(self)
-            self.plot.append(plot)
-            plot.setupDisplay(channel.name, samplerate, datapoints, frequency_range)
-            self.verticalLayout.insertWidget(pos, plot)
-            pos += 1
-
-   
     def timerEvent(self,e):
         ''' Display timer callback.
         Get data from input queue and distribute it to the plot widgets
         '''
         self.DCplot.replot()
-
-class _FFT_Plot(Qwt.QwtPlot):
-    ''' FFT plot widget
-    '''
-    def __init__(self, *args):
-        Qwt.QwtPlot.__init__(self, *args)
-
-        self.setMinimumSize(Qt.QSize(300, 50))
-
-        font = Qt.QFont("arial", 11)
-        title = Qwt.QwtText('FFT')
-        title.setFont(font)
-        self.setTitle(title);
-        self.setCanvasBackground(Qt.Qt.white)
-        
-        # grid 
-        self.grid = Qwt.QwtPlotGrid()
-        self.grid.enableXMin(True)
-        self.grid.setMajPen(Qt.QPen(Qt.Qt.gray, 0, Qt.Qt.SolidLine));
-        self.grid.attach(self)
-
-        # axes
-        font = Qt.QFont("arial", 9)
-        titleX = Qwt.QwtText('Frequency [Hz]')
-        titleX.setFont(font)
-        titleY = Qwt.QwtText('Amplitude')
-        titleY.setFont(font)
-        self.setAxisTitle(Qwt.QwtPlot.xBottom, titleX);
-        self.setAxisTitle(Qwt.QwtPlot.yLeft, titleY);
-        self.setAxisMaxMajor(Qwt.QwtPlot.xBottom, 10);
-        self.setAxisMaxMinor(Qwt.QwtPlot.xBottom, 0);
-        self.setAxisMaxMajor(Qwt.QwtPlot.yLeft, 10);
-        self.setAxisMaxMinor(Qwt.QwtPlot.yLeft, 0);
-        self.setAxisFont(Qwt.QwtPlot.xBottom, font)
-        self.setAxisFont(Qwt.QwtPlot.yLeft, font)
-        self.axisWidget(Qwt.QwtPlot.yLeft).setMinBorderDist(5,10)
-
-        # curves
-        self.curve1 = Qwt.QwtPlotCurve('Trace1')
-        self.curve1.setPen(Qt.QPen(Qt.Qt.blue,2))
-        self.curve1.setYAxis(Qwt.QwtPlot.yLeft)
-        self.curve1.attach(self)
-
-        # set initial display values
-        self.setupDisplay("channel", 500, 1024, 200) 
-        
-
-    def setupDisplay(self, channelname, samplerate, datapoints, frequency_range):
-        ''' Initialize all display parameters
-        @param channelname: channel name as string 
-        @param samplerate:  sampling rate in Hz
-        @param datapoints:  chunk size in samples
-        @param frequency_range: show frequencies up to this value [Hz]
-        '''
-        self.samplerate = samplerate
-        self.datapoints = datapoints
-        self.frequency_range = frequency_range
-        
-        self.dt = 1.0 / samplerate
-        self.df = 1.0 / (datapoints * self.dt)
-        self.xValues = np.arange(0.0, samplerate, self.df)
-        self.yValues = 0.0 * self.xValues
-        self.setAxisScale( Qwt.QwtPlot.xBottom, 0.0, frequency_range)
-        #self.setAxisScale( Qwt.QwtPlot.yLeft, 0.0, 10000.0)
-        self.curve1.setData(self.xValues, self.yValues)
-        self.setTitle(channelname);
-        self.replot()
-
-    def calculate(self, channel_data):
-        ''' Do the FFT
-        @param channel_data: raw data array of chunk size
-        '''
-        lenX = channel_data.shape[0]
-        window = np.hanning(lenX)
-        window = window / sum(window) * 2.0
-        A = np.fft.fft(channel_data*window)
-        B = np.abs(A) 
-        self.curve1.setData(self.xValues[:lenX/2], B[:lenX/2])
-        self.replot()
-
