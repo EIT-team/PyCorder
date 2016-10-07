@@ -33,6 +33,8 @@ from modbase import *
 from PyQt4 import QtGui
 from PyQt4 import Qwt5 as Qwt
 import collections
+from PyQt4 import Qt
+
 
 ################################################################
 # The module itself
@@ -103,7 +105,8 @@ class dc_offset(ModuleBase):
      	    dc_offsets = np.mean(datablock.eeg_channels,1)/1000 #Convert from uV to mV
      	    chan_indices = range(datablock.channel_properties.shape[0])
      	    self.signalPane.DCValues.setData(chan_indices,dc_offsets)
-    
+            
+            
     def process_output(self):
         ''' Send data out to next module
         '''
@@ -195,7 +198,7 @@ class _SignalPane(Qt.QFrame):
 		#Initialise plot object and set background, labels etc
         self.DCplot = Qwt.QwtPlot(self)
         self.DCplot.setCanvasBackground(Qt.Qt.white)
-
+		
         font = Qt.QFont("arial", 9)
         title = Qwt.QwtText('DC Offset')
         xLabel = Qwt.QwtText('Channel number')
@@ -212,8 +215,12 @@ class _SignalPane(Qt.QFrame):
         
         self.verticalLayout = QtGui.QVBoxLayout(self)
         self.verticalLayout.addWidget(self.DCplot)
-
+        
+        #Simple hack to get a bar graph by using stick plot and making the pen wider than default
         self.DCValues = Qwt.QwtPlotCurve()
+        self.DCValues.setStyle(Qwt.QwtPlotCurve.Sticks)
+        self.DCValues.setPen(Qt.QPen(Qt.Qt.red, 5, Qt.Qt.SolidLine))
+
         self.DCValues.attach(self.DCplot)
         
         self.grid = Qwt.QwtPlotGrid()
