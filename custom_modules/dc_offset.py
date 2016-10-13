@@ -34,6 +34,7 @@ from PyQt4 import QtGui
 from PyQt4 import Qwt5 as Qwt
 import collections
 from PyQt4 import Qt
+from sqlite3.dbapi2 import paramstyle
 
 
 ################################################################
@@ -103,7 +104,8 @@ class dc_offset(ModuleBase):
         
         if self.signalPane.isVisible():
      	    dc_offsets = np.mean(datablock.eeg_channels,1)/1000 #Convert from uV to mV
-     	    chan_indices = range(datablock.channel_properties.shape[0])
+     	    chan_indices = [x + 1 for x in range(datablock.channel_properties.shape[0])]
+     	    
      	    self.signalPane.DCValues.setData(chan_indices,dc_offsets)
             
             
@@ -115,7 +117,18 @@ class dc_offset(ModuleBase):
         self.dataavailable = False
         return self.data
 		
-		
+    def process_update(self, params):
+    	if params != None:
+        		#Set the width of the pen for DC offset plot based on the dimensions of the window
+		#and the number of channels
+            num_channels = params.channel_properties.shape[0]
+            frame_width = self.signalPane.width()	
+		#Calculate sensible value for line width, so that bars don't overlap
+            new_pen_width = 0.9*frame_width/ (2*num_channels)
+            self.signalPane.setLineWidth(new_pen_width)
+
+        return params
+    
     def get_online_configuration(self):
         ''' Get the online configuration pane
         @return: a QFrame object or None if you don't need a online configuration pane
@@ -187,7 +200,7 @@ class _OnlineCfgPane(Qt.QFrame):
 		################################################################
 # Signal Pane
 
-class _SignalPane(Qt.QFrame):
+class  _SignalPane(Qt.QFrame):
     ''' FFT display pane
     '''
     def __init__(self , *args):
@@ -219,8 +232,8 @@ class _SignalPane(Qt.QFrame):
         #Simple hack to get a bar graph by using stick plot and making the pen wider than default
         self.DCValues = Qwt.QwtPlotCurve()
         self.DCValues.setStyle(Qwt.QwtPlotCurve.Sticks)
-        self.DCValues.setPen(Qt.QPen(Qt.Qt.red, 5, Qt.Qt.SolidLine))
-
+        #Set the line width
+        self.setLineWidth(5) #Set pen width to 5 - too big if lots of channels (e.g. 128) are used
         self.DCValues.attach(self.DCplot)
         
         self.grid = Qwt.QwtPlotGrid()
@@ -235,6 +248,10 @@ class _SignalPane(Qt.QFrame):
         #Set the y-axis scale 
     def setScale(self, scale):
         self.DCplot.setAxisScale(0,-scale,scale)
+        
+    def setLineWidth(self,width):
+    	
+        self.DCValues.setPen(Qt.QPen(Qt.Qt.red, width, Qt.Qt.SolidLine))
 
     def timerEvent(self,e):
         ''' Display timer callback.
