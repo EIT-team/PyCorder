@@ -169,6 +169,7 @@ def InstantiateModules(run_as):
                    TRG_Eeg(),
                    StorageVision(), 
                    FLT_Eeg(), 
+                   #TUT_0(),
                    RDA_Server(),
                    IMP_Display(), 
                    DISP_Scope(instance=0)
